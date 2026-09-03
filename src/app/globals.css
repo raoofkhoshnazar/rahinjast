@@ -1,15 +1,44 @@
 @import "tailwindcss";
+@import "@fontsource-variable/vazirmatn/wght.css";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #020617;
+  --navy-950: #0b1f3a;
+  --navy-800: #12345b;
+  --navy-600: #315579;
+  --off-white: #f8f6f1;
+  --surface: #ffffff;
+  --amber-500: #d7a33d;
+  --amber-100: #fff2cc;
+  --success-600: #287a5a;
+  --success-100: #e6f4ec;
+  --warning-600: #a86616;
+  --warning-100: #fff0d6;
+  --error-600: #b54747;
+  --error-100: #fbeaea;
+  --border: #e4e2dc;
+  --text-primary: #172a42;
+  --text-secondary: #64748b;
+  --card-shadow: 0 12px 32px rgba(11, 31, 58, 0.08);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-navy-950: var(--navy-950);
+  --color-navy-800: var(--navy-800);
+  --color-navy-600: var(--navy-600);
+  --color-off-white: var(--off-white);
+  --color-surface: var(--surface);
+  --color-amber-500: var(--amber-500);
+  --color-amber-100: var(--amber-100);
+  --color-success-600: var(--success-600);
+  --color-success-100: var(--success-100);
+  --color-warning-600: var(--warning-600);
+  --color-warning-100: var(--warning-100);
+  --color-error-600: var(--error-600);
+  --color-error-100: var(--error-100);
+  --color-line: var(--border);
+  --color-ink: var(--text-primary);
+  --color-muted: var(--text-secondary);
+  --font-sans: "Vazirmatn Variable", Vazirmatn, sans-serif;
 }
 
 * {
@@ -22,9 +51,11 @@ html {
 
 body {
   margin: 0;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--off-white);
+  color: var(--text-primary);
+  font-family: "Vazirmatn Variable", Vazirmatn, sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 button,
@@ -33,24 +64,45 @@ select {
   font: inherit;
 }
 
+.latin-nums {
+  font-variant-numeric: lining-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .field {
   width: 100%;
-  border-radius: 1rem;
-  border: 1px solid #cbd5e1;
-  background: white;
-  padding: 0.875rem 1rem;
-  color: #0f172a;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 14px 16px;
+  color: var(--text-primary);
+  text-align: right;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .field:focus {
   outline: none;
-  border-color: #0891b2;
-  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.15);
+  border-color: var(--navy-800);
+  box-shadow: 0 0 0 4px rgba(18, 52, 91, 0.12);
 }
 
 .field:disabled {
   cursor: not-allowed;
-  background: #f8fafc;
-  color: #64748b;
+  background: #f4f1ea;
+  color: var(--text-secondary);
+}
+
+.field-error {
+  border-color: var(--error-600);
+  background: var(--error-100);
+}
+
+.money-field {
+  text-align: left;
+  direction: ltr;
+}
+
+.card-shadow {
+  box-shadow: var(--card-shadow);
 }

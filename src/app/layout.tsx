@@ -1,27 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "RahInjast | Germany Visa Pathway Recommender",
+  title: "راه اینجاست | مقایسه مسیرهای مهاجرت به آلمان",
   description:
-    "RahInjast helps users compare German immigration pathways with a structured, rules-driven recommendation engine.",
+    "راه اینجاست مناسب‌ترین مسیر ویزای آلمان را بر اساس تحصیلات، شغل، زبان و تمکن مالی شما پیشنهاد می‌دهد.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full">{children}</body>
+    <html lang="fa" dir="rtl" className="h-full antialiased">
+      <body className="min-h-full bg-off-white font-sans text-ink">{children}</body>
     </html>
   );
 }

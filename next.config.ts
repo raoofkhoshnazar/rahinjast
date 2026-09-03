@@ -9,7 +9,14 @@ const nextConfig: NextConfig = isGithubPages
       assetPrefix: "/rahinjast/",
       trailingSlash: true,
       images: { unoptimized: true },
+      env: {
+        NEXT_PUBLIC_BASE_PATH: "/rahinjast",
+      },
     }
-  : {};
+  : {
+      env: {
+        NEXT_PUBLIC_BASE_PATH: "",
+      },
+    };
 
 export default nextConfig;

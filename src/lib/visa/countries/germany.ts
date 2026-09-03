@@ -10,12 +10,9 @@ import {
 } from "../engine";
 import type { EvaluationContext, RequirementCheck, VisaDefinition } from "../types";
 
-function summarize(checks: RequirementCheck[], missingItems: string[], fallback: string) {
-  if (!missingItems.length) {
-    return fallback;
-  }
-
-  return `Main gaps: ${missingItems.slice(0, 2).join("; ")}${missingItems.length > 2 ? "; more checks below." : "."}`;
+function summarize(missingItems: string[], fallback: string) {
+  if (!missingItems.length) return fallback;
+  return `شکاف‌های اصلی: ${missingItems.slice(0, 2).join("؛ ")}${missingItems.length > 2 ? "؛ جزئیات بیشتر در ادامه." : "."}`;
 }
 
 function byRequirements(checks: RequirementCheck[], baseScore = 40) {
@@ -31,7 +28,6 @@ function shortageThreshold(profile: UserProfile, context: EvaluationContext) {
 
 function chancenkartePoints(profile: UserProfile) {
   let points = 0;
-
   if (hasPostSecondaryQualification(profile) && ["partial", "full"].includes(profile.recognitionStatus)) points += 4;
   if (meetsGermanLevel(profile.germanLevel, "B2")) points += 1;
   else if (meetsGermanLevel(profile.germanLevel, "A2")) points += 0.5;
@@ -42,7 +38,6 @@ function chancenkartePoints(profile: UserProfile) {
   if (profile.hasPriorGermanyStay) points += 0.5;
   if (profile.spouseHasQualifyingProfile) points += 1;
   if (profile.jobFieldIsShortageOccupation) points += 1;
-
   return points;
 }
 
@@ -53,55 +48,41 @@ export const germanyVisas: VisaDefinition[] = [
     name: "EU Blue Card",
     shortLabel: "Blue Card",
     category: "work",
-    summary: "Best for academic professionals with a German job offer and a qualifying salary.",
-    processingTime: "4-12 weeks",
-    applicationCost: "€75 visa fee + €100-€147 residence permit issuance",
-    residencyPath: "Permanent residence after 21 months with B1 German or 33 months without B1.",
-    validity: "Typically up to 4 years",
+    summary: "برای متخصصان دانشگاهی با پیشنهاد شغلی آلمانی و حقوق بالای آستانه.",
+    processingTime: "۴ تا ۱۲ هفته",
+    applicationCost: "€75 هزینه ویزا + €100 تا €147 صدور کارت اقامت",
+    residencyPath: "اقامت دائم پس از ۲۱ ماه با آلمانی B1 یا ۳۳ ماه بدون B1.",
+    validity: "معمولاً تا ۴ سال",
     keyRequirements: [
-      "Bachelor's degree or higher",
-      "Recognized degree via anabin/KMK",
-      "German job offer in a degree-related role",
-      `Salary threshold of ${formatCurrency(45300)} or ${formatCurrency(41041.8)} for shortage occupations`,
+      "حداقل کارشناسی",
+      "تأیید مدرک در anabin/KMK",
+      "پیشنهاد شغلی مرتبط از کارفرمای آلمانی",
+      `سقف حقوق ${formatCurrency(45300)} یا ${formatCurrency(41041.8)} برای مشاغل کمبود نیرو`,
     ],
-    caveats: ["Spouse gets immediate unrestricted work rights", "German is not required for the visa itself"],
     evaluate: (profile, context) => {
       const threshold = shortageThreshold(profile, context);
       const salary = profile.annualSalaryOffer ?? 0;
       const missingSalary = Math.max(0, threshold - salary);
       const checks: RequirementCheck[] = [
+        { label: "مدرک دانشگاهی", met: hasAcademicDegree(profile), detail: "بلوکارت به کارشناسی یا بالاتر نیاز دارد." },
+        { label: "تأیید مدرک", met: profile.recognitionStatus === "full", detail: "مدرک باید به‌طور کامل از طریق anabin/KMK تأیید شود." },
+        { label: "پیشنهاد شغلی", met: profile.hasGermanJobOffer, detail: "قرارداد کاری امضاشده از کارفرمای آلمانی الزامی است." },
         {
-          label: "Academic degree",
-          met: hasAcademicDegree(profile),
-          detail: "Blue Card requires a bachelor's degree or higher.",
-        },
-        {
-          label: "Recognition",
-          met: profile.recognitionStatus === "full",
-          detail: "Your degree should be fully recognized via anabin/KMK.",
-        },
-        {
-          label: "German job offer",
-          met: profile.hasGermanJobOffer,
-          detail: "A signed German employment contract is mandatory.",
-        },
-        {
-          label: "Salary threshold",
+          label: "سقف حقوق",
           met: salary >= threshold,
-          detail:
-            missingSalary > 0
-              ? `You are ${formatCurrency(missingSalary)} below the ${profile.jobFieldIsShortageOccupation ? "shortage occupation" : "general"} threshold.`
-              : `Salary meets the ${formatCurrency(threshold)} threshold.`,
+          detail: missingSalary > 0
+            ? `شما ${formatCurrency(missingSalary)} کمتر از سقف ${profile.jobFieldIsShortageOccupation ? "مشاغل کمبود نیرو" : "عمومی"} هستید.`
+            : `حقوق به سقف ${formatCurrency(threshold)} می‌رسد.`,
         },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       const fitHighlights = [];
-      if (profile.jobFieldIsShortageOccupation) fitHighlights.push("Your field appears to qualify for the lower shortage-occupation Blue Card threshold.");
-      if (meetsGermanLevel(profile.germanLevel, "B1")) fitHighlights.push("You are positioned for the accelerated 21-month permanent residence route.");
+      if (profile.jobFieldIsShortageOccupation) fitHighlights.push("رشتهٔ شما می‌تواند از سقف پایین‌تر بلوکارت برای مشاغل کمبود نیرو استفاده کند.");
+      if (meetsGermanLevel(profile.germanLevel, "B1")) fitHighlights.push("با آلمانی B1 در مسیر ۲۱ ماههٔ اقامت دائم قرار می‌گیرید.");
       return {
         eligible: missingItems.length === 0,
         score: byRequirements(checks, 55),
-        rationale: summarize(checks, missingItems, "You meet the core Blue Card conditions and this is likely your fastest route to permanent residence."),
+        rationale: summarize(missingItems, "شرایط اصلی بلوکارت را دارید و این معمولاً سریع‌ترین مسیر به اقامت دائم است."),
         missingItems,
         requirementChecks: checks,
         fitHighlights,
@@ -114,36 +95,31 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Skilled Worker Visa (Academic)",
     shortLabel: "Skilled Worker Academic",
     category: "work",
-    summary: "For degree holders with a German job offer whose salary is below Blue Card or who prefer a broader work route.",
-    processingTime: "6-16 weeks",
-    applicationCost: "€75 visa fee + €100-€147 residence permit issuance",
-    residencyPath: "Permanent residence after 4 years of work with B1 German.",
-    validity: "Usually up to 4 years",
-    keyRequirements: [
-      "Bachelor's degree or higher",
-      "Recognized degree",
-      "German job offer related to the degree",
-      "At least the legal minimum wage in Germany",
-    ],
+    summary: "برای فارغ‌التحصیلان دانشگاهی با پیشنهاد شغلی که حقوق‌شان زیر سقف بلوکارت است.",
+    processingTime: "۶ تا ۱۶ هفته",
+    applicationCost: "€75 هزینه ویزا + €100 تا €147 صدور کارت اقامت",
+    residencyPath: "اقامت دائم پس از ۴ سال کار با آلمانی B1.",
+    validity: "معمولاً تا ۴ سال",
+    keyRequirements: ["حداقل کارشناسی", "مدرک تأییدشده", "پیشنهاد شغلی مرتبط", "حداقل دستمزد قانونی آلمان"],
     evaluate: (profile) => {
       const checks: RequirementCheck[] = [
-        { label: "Academic degree", met: hasAcademicDegree(profile), detail: "This path is for university graduates." },
-        { label: "Recognition", met: profile.recognitionStatus === "full", detail: "Your degree should be fully recognized." },
-        { label: "German job offer", met: profile.hasGermanJobOffer, detail: "A German job offer is required." },
+        { label: "مدرک دانشگاهی", met: hasAcademicDegree(profile), detail: "این مسیر برای فارغ‌التحصیلان دانشگاه است." },
+        { label: "تأیید مدرک", met: profile.recognitionStatus === "full", detail: "مدرک باید کاملاً تأیید شده باشد." },
+        { label: "پیشنهاد شغلی", met: profile.hasGermanJobOffer, detail: "پیشنهاد شغلی آلمانی لازم است." },
         {
-          label: "Language readiness",
+          label: "آمادگی زبانی",
           met: meetsGermanLevel(profile.germanLevel, "B1") || meetsEnglishLevel(profile.englishLevel, "B2"),
-          detail: "B1 German is recommended; some technical roles can proceed in English.",
+          detail: "آلمانی B1 توصیه می‌شود؛ بعضی مشاغل فنی با انگلیسی هم پیش می‌روند.",
         },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       return {
         eligible: checks[0].met && checks[1].met && checks[2].met,
         score: byRequirements(checks, 48),
-        rationale: summarize(checks, missingItems, "You fit the broader academic skilled-worker route and could later upgrade to a Blue Card if salary rises."),
+        rationale: summarize(missingItems, "مسیر گسترده‌تر نیروی متخصص دانشگاهی برای شما مناسب است و بعداً با افزایش حقوق می‌توان به بلوکارت ارتقا داد."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["No special salary floor beyond legal wage rules.", "Broader option when Blue Card pay thresholds are not met."],
+        fitHighlights: ["سقف حقوق خاصی فراتر از حداقل قانونی ندارد.", "گزینهٔ مناسب وقتی حقوق به بلوکارت نمی‌رسد."],
       };
     },
   },
@@ -153,33 +129,28 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Skilled Worker Visa (Vocational)",
     shortLabel: "Skilled Worker Vocational",
     category: "work",
-    summary: "For recognized vocational professionals with a German job offer and relevant work experience.",
-    processingTime: "6-16 weeks",
-    applicationCost: "€75 visa fee + €100-€147 residence permit issuance",
-    residencyPath: "Permanent residence after 4 years of work with B1 German.",
-    validity: "Usually up to 4 years",
-    keyRequirements: [
-      "Recognized vocational qualification",
-      "German job offer in the same profession",
-      "At least 2 years of relevant experience",
-      "B1 German minimum, B2 recommended",
-    ],
+    summary: "برای دارندگان مدرک حرفه‌ای تأییدشده با پیشنهاد شغلی و سابقهٔ مرتبط.",
+    processingTime: "۶ تا ۱۶ هفته",
+    applicationCost: "€75 هزینه ویزا + €100 تا €147 صدور کارت اقامت",
+    residencyPath: "اقامت دائم پس از ۴ سال کار با آلمانی B1.",
+    validity: "معمولاً تا ۴ سال",
+    keyRequirements: ["مدرک حرفه‌ای تأییدشده", "پیشنهاد شغلی در همان حرفه", "حداقل ۲ سال سابقه", "حداقل آلمانی B1"],
     evaluate: (profile) => {
       const checks: RequirementCheck[] = [
-        { label: "Vocational qualification", met: hasVocationalQualification(profile), detail: "A vocational pathway or comparable qualification is needed." },
-        { label: "Recognition", met: profile.recognitionStatus === "full", detail: "Vocational recognition is the critical approval step." },
-        { label: "German job offer", met: profile.hasGermanJobOffer, detail: "A German job offer is required." },
-        { label: "Experience", met: profile.yearsOfExperience >= 2, detail: "At least 2 years of documented relevant experience is expected." },
-        { label: "German level", met: meetsGermanLevel(profile.germanLevel, "B1"), detail: "You need at least B1 German, and some fields need B2." },
+        { label: "مدرک حرفه‌ای", met: hasVocationalQualification(profile), detail: "این مسیر به آموزش حرفه‌ای معتبر نیاز دارد." },
+        { label: "تأیید مدرک", met: profile.recognitionStatus === "full", detail: "تأیید حرفه‌ای مهم‌ترین مرحله است." },
+        { label: "پیشنهاد شغلی", met: profile.hasGermanJobOffer, detail: "پیشنهاد شغلی آلمانی لازم است." },
+        { label: "سابقه", met: profile.yearsOfExperience >= 2, detail: "حداقل ۲ سال سابقهٔ مستند مرتبط انتظار می‌رود." },
+        { label: "آلمانی", met: meetsGermanLevel(profile.germanLevel, "B1"), detail: "حداقل B1 لازم است و در بعضی حوزه‌ها B2 اجباری است." },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       return {
         eligible: missingItems.length === 0,
         score: byRequirements(checks, 45),
-        rationale: summarize(checks, missingItems, "You match the vocational skilled-worker route if your qualification is recognized for the target profession."),
+        rationale: summarize(missingItems, "اگر مدرک حرفه‌ای‌تان برای شغل هدف تأیید شود، مسیر نیروی متخصص حرفه‌ای برایتان مناسب است."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["Relevant for trades, care roles, and other technical professions.", "Recognition partnership can ease the move before full recognition is complete."],
+        fitHighlights: ["مناسب مشاغل فنی، مراقبتی و حرفه‌ای.", "شراکت تأیید می‌تواند ورود را قبل از تکمیل کامل Anerkennung ممکن کند."],
       };
     },
   },
@@ -189,53 +160,46 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Opportunity Card (Chancenkarte)",
     shortLabel: "Chancenkarte",
     category: "job-search",
-    summary: "Points-based route for candidates who want to move first and job-search from inside Germany.",
-    processingTime: "4-10 weeks",
+    summary: "مسیر امتیازی برای ورود به آلمان و جستجوی کار از داخل کشور.",
+    processingTime: "۴ تا ۱۰ هفته",
     applicationCost: "€75",
-    residencyPath: "Convert to Blue Card or Skilled Worker after landing a job, then follow that route to PR.",
-    validity: "1 year, extendable once",
+    residencyPath: "پس از یافتن شغل به بلوکارت یا ویزای نیروی متخصص تبدیل می‌شود.",
+    validity: "۱ سال، یک‌بار قابل تمدید",
     keyRequirements: [
-      "At least 6 points in the points system",
-      `Funds of ${formatCurrency(1027, "month")} or ${formatCurrency(12324)}`,
-      "Recognized or partially recognized academic/vocational qualification",
-      "Health insurance and clean record",
+      "حداقل ۶ امتیاز",
+      `تمکن ${formatCurrency(1027, "month")} یا ${formatCurrency(12324)}`,
+      "مدرک دانشگاهی یا حرفه‌ای تأییدشده یا در حال تأیید",
     ],
-    caveats: ["Allows up to 20 hours/week of work", "Usually not a strong route for bringing family immediately"],
     evaluate: (profile, context) => {
       const points = chancenkartePoints(profile);
       const monthlyFunds = getMonthlySavings(profile);
       const checks: RequirementCheck[] = [
         {
-          label: "Qualification base",
+          label: "پایهٔ مدرک",
           met: hasPostSecondaryQualification(profile) && ["partial", "full"].includes(profile.recognitionStatus),
-          detail: "You need a recognized or in-progress academic/vocational qualification for the core 4 points.",
+          detail: "برای ۴ امتیاز پایه، مدرک دانشگاهی یا حرفه‌ای تأییدشده یا در حال تأیید لازم است.",
         },
         {
-          label: "Points threshold",
+          label: "آستانهٔ امتیاز",
           met: points >= 6,
-          detail: points >= 6 ? `You currently score ${points} points.` : `You currently score ${points} points and need at least 6.`,
+          detail: points >= 6 ? `الان ${points} امتیاز دارید.` : `الان ${points} امتیاز دارید و حداقل ۶ امتیاز لازم است.`,
         },
         {
-          label: "Monthly funds",
+          label: "تمکن ماهانه",
           met: monthlyFunds >= context.chancenkarteMonthlyFunds,
-          detail:
-            monthlyFunds >= context.chancenkarteMonthlyFunds
-              ? `Your reported funds meet the ${formatCurrency(context.chancenkarteMonthlyFunds, "month")} benchmark.`
-              : `You need about ${formatCurrency(context.chancenkarteMonthlyFunds - monthlyFunds, "month")} more per month in accessible funds.`,
+          detail: monthlyFunds >= context.chancenkarteMonthlyFunds
+            ? `تمکن شما به معیار ${formatCurrency(context.chancenkarteMonthlyFunds, "month")} می‌رسد.`
+            : `حدود ${formatCurrency(context.chancenkarteMonthlyFunds - monthlyFunds, "month")} تمکن ماهانه کم دارید.`,
         },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
-      const fitHighlights = [
-        `${points} / 6 points based on your age, language, recognition, Germany ties, and shortage occupation status.`,
-        "Lets you work up to 20 hours per week while job searching in Germany.",
-      ];
       return {
         eligible: missingItems.length === 0,
         score: Math.min(99, Math.round(35 + points * 8 + (checks[2].met ? 12 : 0))),
-        rationale: summarize(checks, missingItems, "You clear the Opportunity Card baseline and have a credible route to enter Germany first, then convert into a work permit."),
+        rationale: summarize(missingItems, "آستانهٔ کارت شانس را رد می‌کنید و می‌توانید ابتدا وارد آلمان شوید و بعد ویزا را به مسیر کاری تبدیل کنید."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights,
+        fitHighlights: [`${points} از ۶ امتیاز بر اساس سن، زبان، تأیید مدرک و پیوند با آلمان.`, "تا ۲۰ ساعت در هفته اجازهٔ کار حین جستجوی شغل دارید."],
       };
     },
   },
@@ -245,47 +209,39 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Job Seeker Visa",
     shortLabel: "Job Seeker",
     category: "job-search",
-    summary: "Legacy job-search visa for fully recognized degree holders with strong experience and language ability.",
-    processingTime: "4-10 weeks",
+    summary: "ویزای قدیمی جستجوی کار برای دارندگان مدرک کاملاً تأییدشده و سابقهٔ قوی.",
+    processingTime: "۴ تا ۱۰ هفته",
     applicationCost: "€75",
-    residencyPath: "Convert to Blue Card or Skilled Worker after securing employment.",
-    validity: "6 months, not extendable",
-    keyRequirements: [
-      "Bachelor's degree or higher",
-      "Full recognition",
-      "At least 5 years of relevant work experience",
-      `Funds of ${formatCurrency(1027, "month")}`,
-      "At least B1 German or B1 English",
-    ],
-    caveats: ["No work is allowed on this visa", "Chancenkarte is often more flexible"],
+    residencyPath: "پس از یافتن شغل به بلوکارت یا نیروی متخصص تبدیل می‌شود.",
+    validity: "۶ ماه، غیرقابل تمدید",
+    keyRequirements: ["حداقل کارشناسی", "تأیید کامل مدرک", "حداقل ۵ سال سابقه", `تمکن ${formatCurrency(1027, "month")}`, "حداقل B1 آلمانی یا انگلیسی"],
     evaluate: (profile, context) => {
       const monthlyFunds = getMonthlySavings(profile);
       const checks: RequirementCheck[] = [
-        { label: "Academic degree", met: hasAcademicDegree(profile), detail: "A university degree is required." },
-        { label: "Full recognition", met: profile.recognitionStatus === "full", detail: "This route requires complete recognition, not partial recognition." },
-        { label: "Experience", met: profile.yearsOfExperience >= 5, detail: "At least 5 years of relevant work experience is required." },
+        { label: "مدرک دانشگاهی", met: hasAcademicDegree(profile), detail: "مدرک دانشگاهی لازم است." },
+        { label: "تأیید کامل", met: profile.recognitionStatus === "full", detail: "این مسیر تأیید کامل می‌خواهد، نه تأیید جزئی." },
+        { label: "سابقه", met: profile.yearsOfExperience >= 5, detail: "حداقل ۵ سال سابقهٔ مرتبط لازم است." },
         {
-          label: "Funds",
+          label: "تمکن",
           met: monthlyFunds >= context.chancenkarteMonthlyFunds,
-          detail:
-            monthlyFunds >= context.chancenkarteMonthlyFunds
-              ? `Your funds meet the ${formatCurrency(context.chancenkarteMonthlyFunds, "month")} threshold.`
-              : `You need about ${formatCurrency(context.chancenkarteMonthlyFunds - monthlyFunds, "month")} more per month in accessible funds.`,
+          detail: monthlyFunds >= context.chancenkarteMonthlyFunds
+            ? `تمکن شما به ${formatCurrency(context.chancenkarteMonthlyFunds, "month")} می‌رسد.`
+            : `حدود ${formatCurrency(context.chancenkarteMonthlyFunds - monthlyFunds, "month")} تمکن ماهانه کم دارید.`,
         },
         {
-          label: "Language",
+          label: "زبان",
           met: meetsGermanLevel(profile.germanLevel, "B1") || meetsEnglishLevel(profile.englishLevel, "B1"),
-          detail: "You need at least B1 proficiency in German or English.",
+          detail: "حداقل B1 آلمانی یا انگلیسی لازم است.",
         },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       return {
         eligible: missingItems.length === 0,
         score: byRequirements(checks, 38),
-        rationale: summarize(checks, missingItems, "You satisfy the stricter legacy job-seeker route, although Chancenkarte may still offer more flexibility."),
+        rationale: summarize(missingItems, "شرایط سخت‌گیرانهٔ جاب‌سیکر را دارید، هرچند کارت شانس معمولاً منعطف‌تر است."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["No work permitted during the visa.", "Useful when your degree is fully recognized but points-based routes are weaker."],
+        fitHighlights: ["در طول این ویزا کار مجاز نیست.", "وقتی مدرک کاملاً تأیید شده اما امتیاز کارت شانس ضعیف است، گزینه می‌ماند."],
       };
     },
   },
@@ -295,32 +251,27 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Ausbildung Visa",
     shortLabel: "Ausbildung",
     category: "training",
-    summary: "For candidates who already secured a German apprenticeship contract.",
-    processingTime: "4-12 weeks",
+    summary: "برای کسانی که قرارداد آموزش حرفه‌ای با شرکت آلمانی دارند.",
+    processingTime: "۴ تا ۱۲ هفته",
     applicationCost: "€75",
-    residencyPath: "Move into a skilled-worker permit after completing training, then permanent residence after 4-5 years total with B1.",
-    validity: "Duration of the training program (usually 3-3.5 years)",
-    keyRequirements: [
-      "Signed Ausbildung contract",
-      "At least a high school diploma",
-      "B1 German minimum, B2 recommended",
-      "Usually strongest under age 35",
-    ],
+    residencyPath: "پس از فارغ‌التحصیلی به ویزای نیروی متخصص و سپس اقامت دائم با B1.",
+    validity: "مدت دوره، معمولاً ۳ تا ۳٫۵ سال",
+    keyRequirements: ["قرارداد Ausbildung", "حداقل دیپلم", "حداقل آلمانی B1", "معمولاً زیر ۳۵ سال"],
     evaluate: (profile) => {
       const checks: RequirementCheck[] = [
-        { label: "Training contract", met: profile.hasAusbildungContract, detail: "A signed Ausbildung contract is mandatory." },
-        { label: "Education", met: ["high-school", "vocational", "bachelor", "master", "phd"].includes(profile.educationLevel), detail: "At least a secondary-school completion credential is expected." },
-        { label: "German level", met: meetsGermanLevel(profile.germanLevel, "B1"), detail: "You need B1 German at minimum, and some care fields require B2." },
-        { label: "Age fit", met: profile.age !== null && profile.age < 35, detail: "This path is most commonly approved for applicants under 35, though some employers accept older candidates." },
+        { label: "قرارداد آموزشی", met: profile.hasAusbildungContract, detail: "قرارداد امضاشدهٔ آزبیلدونگ الزامی است." },
+        { label: "تحصیلات", met: ["high-school", "vocational", "bachelor", "master", "phd"].includes(profile.educationLevel), detail: "حداقل دیپلم انتظار می‌رود." },
+        { label: "آلمانی", met: meetsGermanLevel(profile.germanLevel, "B1"), detail: "حداقل B1 لازم است و در مراقبت B2 رایج است." },
+        { label: "سن", met: profile.age !== null && profile.age < 35, detail: "این مسیر معمولاً برای زیر ۳۵ سال قوی‌تر است، هرچند بعضی کارفرماها تا ۴۵ سال هم می‌پذیرند." },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       return {
         eligible: checks[0].met && checks[1].met && checks[2].met,
         score: byRequirements(checks, 42),
-        rationale: summarize(checks, missingItems, "You have the building blocks for a stable apprenticeship-led immigration route if the contract is in place."),
+        rationale: summarize(missingItems, "اگر قرارداد آموزشی آماده باشد، آزبیلدونگ یکی از پایدارترین مسیرهای ورود است."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["Training salary and insurance usually begin from day one.", "Common monthly apprentice pay ranges from about €649 to €1,300 depending on the field."],
+        fitHighlights: ["حقوق آموزشی و بیمه معمولاً از روز اول شروع می‌شود.", "حقوق ماهانهٔ تقریبی از حدود €649 تا €1,300 بسته به رشته."],
       };
     },
   },
@@ -330,43 +281,38 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Student Visa",
     shortLabel: "Student",
     category: "study",
-    summary: "For admitted students pursuing a degree in Germany.",
-    processingTime: "4-12 weeks",
+    summary: "برای پذیرفته‌شدگان دانشگاه‌های آلمان.",
+    processingTime: "۴ تا ۱۲ هفته",
     applicationCost: "€75",
-    residencyPath: "18-month job-search permit after graduation, then switch to Skilled Worker/Blue Card; PR after 2 years of post-graduation work with B1.",
-    validity: "Length of study program",
-    keyRequirements: [
-      "University admission letter",
-      `Blocked account of ${formatCurrency(11208)} (${formatCurrency(934, "month")})`,
-      "B2-C1 German for German-taught programs or IELTS 6.5+/TOEFL 90+ for English-taught programs",
-    ],
+    residencyPath: "۱۸ ماه جستجوی کار پس از فارغ‌التحصیلی، سپس نیروی متخصص یا بلوکارت؛ اقامت دائم پس از ۲ سال کار با B1.",
+    validity: "مدت تحصیل",
+    keyRequirements: ["نامهٔ پذیرش", `حساب بلوکه ${formatCurrency(11208)} (${formatCurrency(934, "month")})`, "آلمانی B2-C1 یا انگلیسی قوی"],
     evaluate: (profile, context) => {
       const annualFunds = (profile.monthlySavings ?? 0) * 12;
       const checks: RequirementCheck[] = [
-        { label: "Study intent", met: profile.wantsToStudy, detail: "This route only fits if you intend to study in Germany." },
-        { label: "Admission", met: profile.hasUniversityAdmission, detail: "You need a university admission letter before applying." },
+        { label: "قصد تحصیل", met: profile.wantsToStudy, detail: "این مسیر فقط اگر قصد تحصیل داشته باشید معنا دارد." },
+        { label: "پذیرش", met: profile.hasUniversityAdmission, detail: "نامهٔ پذیرش دانشگاه قبل از درخواست ویزا لازم است." },
         {
-          label: "Blocked account funds",
+          label: "حساب بلوکه",
           met: annualFunds >= context.studentBlockedAnnual,
-          detail:
-            annualFunds >= context.studentBlockedAnnual
-              ? `Your reported funds cover the ${formatCurrency(context.studentBlockedAnnual)} blocked-account benchmark.`
-              : `You are ${formatCurrency(context.studentBlockedAnnual - annualFunds)} short of the current student blocked-account benchmark.`,
+          detail: annualFunds >= context.studentBlockedAnnual
+            ? `تمکن شما معیار ${formatCurrency(context.studentBlockedAnnual)} را پوشش می‌دهد.`
+            : `شما ${formatCurrency(context.studentBlockedAnnual - annualFunds)} کمتر از معیار حساب بلوکه هستید.`,
         },
         {
-          label: "Language readiness",
+          label: "زبان",
           met: meetsGermanLevel(profile.germanLevel, "B2") || meetsEnglishLevel(profile.englishLevel, "B2"),
-          detail: "You typically need B2+ German for German-taught programs or strong English for English-taught programs.",
+          detail: "برای دوره‌های آلمانی معمولاً B2+ و برای دوره‌های انگلیسی مدرک زبان قوی لازم است.",
         },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       return {
         eligible: missingItems.length === 0,
         score: byRequirements(checks, 44),
-        rationale: summarize(checks, missingItems, "You line up with the student route and would keep a strong path into post-study work and later permanent residence."),
+        rationale: summarize(missingItems, "با مسیر دانشجویی می‌توانید بعد از تحصیل وارد کار و سپس اقامت دائم شوید."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["Public universities are largely tuition-free in Germany.", "Students can work 120 full days or 240 half days per year."],
+        fitHighlights: ["دانشگاه‌های دولتی عمدتاً شهریه ندارند.", "کار دانشجویی ۱۲۰ روز کامل یا ۲۴۰ نیم‌روز در سال مجاز است."],
       };
     },
   },
@@ -376,40 +322,34 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Studienkolleg Visa",
     shortLabel: "Studienkolleg",
     category: "study",
-    summary: "Bridge route for applicants whose school diploma is not directly equivalent to the German Abitur.",
-    processingTime: "4-10 weeks",
+    summary: "پل ورود به دانشگاه اگر دیپلم معادل آبیتور نباشد.",
+    processingTime: "۴ تا ۱۰ هفته",
     applicationCost: "€75",
-    residencyPath: "Complete Studienkolleg, pass FSP, then convert to Student Visa and continue to work-based residency later.",
-    validity: "Usually 1 year",
-    keyRequirements: [
-      "Studienkolleg admission",
-      "B2 German minimum",
-      `Blocked account of ${formatCurrency(11208)}`,
-      "Usually best for applicants under 30",
-    ],
+    residencyPath: "پس از قبولی در FSP به ویزای دانشجویی تبدیل می‌شود.",
+    validity: "معمولاً ۱ سال",
+    keyRequirements: ["پذیرش اشتودین‌کولگ", "حداقل آلمانی B2", `حساب بلوکه ${formatCurrency(11208)}`, "معمولاً زیر ۳۰ سال"],
     evaluate: (profile, context) => {
       const annualFunds = (profile.monthlySavings ?? 0) * 12;
       const checks: RequirementCheck[] = [
-        { label: "Admission", met: profile.hasStudienkollegAdmission, detail: "You need admission to a Studienkolleg program." },
-        { label: "German level", met: meetsGermanLevel(profile.germanLevel, "B2"), detail: "Most Studienkolleg routes expect at least B2 German." },
+        { label: "پذیرش", met: profile.hasStudienkollegAdmission, detail: "پذیرش اشتودین‌کولگ لازم است." },
+        { label: "آلمانی", met: meetsGermanLevel(profile.germanLevel, "B2"), detail: "بیشتر مسیرها حداقل B2 می‌خواهند." },
         {
-          label: "Blocked account funds",
+          label: "حساب بلوکه",
           met: annualFunds >= context.studentBlockedAnnual,
-          detail:
-            annualFunds >= context.studentBlockedAnnual
-              ? `Your reported funds cover the ${formatCurrency(context.studentBlockedAnnual)} requirement.`
-              : `You are ${formatCurrency(context.studentBlockedAnnual - annualFunds)} short of the current blocked-account requirement.`,
+          detail: annualFunds >= context.studentBlockedAnnual
+            ? `تمکن شما معیار ${formatCurrency(context.studentBlockedAnnual)} را پوشش می‌دهد.`
+            : `شما ${formatCurrency(context.studentBlockedAnnual - annualFunds)} کمتر از معیار حساب بلوکه هستید.`,
         },
-        { label: "Age fit", met: profile.age !== null && profile.age < 30, detail: "This route is most common for applicants under 30." },
+        { label: "سن", met: profile.age !== null && profile.age < 30, detail: "این مسیر معمولاً برای زیر ۳۰ سال رایج‌تر است." },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       return {
         eligible: checks[0].met && checks[1].met && checks[2].met,
         score: byRequirements(checks, 36),
-        rationale: summarize(checks, missingItems, "You can use Studienkolleg as the academic bridge if direct university entry is not yet available."),
+        rationale: summarize(missingItems, "اگر ورود مستقیم به دانشگاه ممکن نیست، اشتودین‌کولگ پل تحصیلی مناسب است."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["Leads into Student Visa after passing the Feststellungsprufung (FSP)."],
+        fitHighlights: ["پس از قبولی در آزمون FSP به ویزای دانشجویی تبدیل می‌شود."],
       };
     },
   },
@@ -419,38 +359,32 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Language Course Visa",
     shortLabel: "Language Course",
     category: "language",
-    summary: "Short-term route for intensive German study before pursuing another long-term path.",
-    processingTime: "2-6 weeks",
+    summary: "مسیر کوتاه‌مدت برای تقویت آلمانی قبل از مسیر اصلی.",
+    processingTime: "۲ تا ۶ هفته",
     applicationCost: "€75",
-    residencyPath: "No direct PR route; you normally return home and reapply for a study or work visa later.",
-    validity: "Up to 12 months",
-    keyRequirements: [
-      "Enrollment in a recognized language school",
-      `About ${formatCurrency(1000, "month")} in funds`,
-      "Used as a stepping stone, not a direct settlement path",
-    ],
-    caveats: ["No work allowed", "Cannot normally switch to work or study from inside Germany"],
+    residencyPath: "مسیر مستقیم به اقامت دائم ندارد؛ معمولاً باید برگردید و از نو اقدام کنید.",
+    validity: "حداکثر ۱۲ ماه",
+    keyRequirements: ["ثبت‌نام در مدرسهٔ زبان معتبر", `حدود ${formatCurrency(1000, "month")} تمکن`, "پله است، مقصد نیست"],
     evaluate: (profile, context) => {
       const monthlyFunds = getMonthlySavings(profile);
       const checks: RequirementCheck[] = [
-        { label: "Language study intent", met: profile.wantsLanguageCourse, detail: "This only fits if you specifically want an intensive language course in Germany." },
+        { label: "قصد دورهٔ زبان", met: profile.wantsLanguageCourse, detail: "این مسیر فقط برای دورهٔ فشردهٔ زبان مناسب است." },
         {
-          label: "Monthly funds",
+          label: "تمکن ماهانه",
           met: monthlyFunds >= context.languageCourseMonthlyFunds,
-          detail:
-            monthlyFunds >= context.languageCourseMonthlyFunds
-              ? `Your funds meet the ${formatCurrency(context.languageCourseMonthlyFunds, "month")} expectation.`
-              : `You need about ${formatCurrency(context.languageCourseMonthlyFunds - monthlyFunds, "month")} more per month in funds.`,
+          detail: monthlyFunds >= context.languageCourseMonthlyFunds
+            ? `تمکن شما به ${formatCurrency(context.languageCourseMonthlyFunds, "month")} می‌رسد.`
+            : `حدود ${formatCurrency(context.languageCourseMonthlyFunds - monthlyFunds, "month")} تمکن ماهانه کم دارید.`,
         },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       return {
         eligible: missingItems.length === 0,
         score: byRequirements(checks, 22),
-        rationale: summarize(checks, missingItems, "This works as a language-upgrade bridge if your immediate goal is to strengthen German before applying through another route."),
+        rationale: summarize(missingItems, "اگر هدف فوری تقویت زبان است، این مسیر پل کوتاهی است نه مسیر استقرار."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["Useful when language is your main blocker.", "Expect to apply for your long-term route from outside Germany afterward."],
+        fitHighlights: ["وقتی زبان مانع اصلی است مفید است.", "تبدیل از داخل آلمان معمولاً ممکن نیست."],
       };
     },
   },
@@ -460,48 +394,41 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Freelancer / Self-Employment Visa",
     shortLabel: "Freelancer",
     category: "business",
-    summary: "For independent professionals with a viable plan and enough financial runway.",
-    processingTime: "8-24 weeks",
-    applicationCost: "€75 visa fee + €100-€200 residence permit issuance",
-    residencyPath: "Permanent residence after 5 years of successful self-employment with B1 German.",
-    validity: "Usually 3 years initially",
-    keyRequirements: [
-      "Business plan",
-      `At least ${formatCurrency(1200, "month")} in monthly funds for setup`,
-      `Projected income of at least ${formatCurrency(25000)}`,
-      "Health insurance and any required professional licensing",
-    ],
+    summary: "برای متخصصان مستقل با طرح کسب‌وکار و درآمد قابل دفاع.",
+    processingTime: "۸ تا ۲۴ هفته",
+    applicationCost: "€75 هزینه ویزا + €100 تا €200 صدور کارت اقامت",
+    residencyPath: "اقامت دائم پس از ۵ سال فعالیت موفق با آلمانی B1.",
+    validity: "معمولاً ۳ سال در ابتدا",
+    keyRequirements: ["طرح کسب‌وکار", `حداقل ${formatCurrency(1200, "month")} برای راه‌اندازی`, `درآمد پیش‌بینی‌شده حداقل ${formatCurrency(25000)}`],
     evaluate: (profile, context) => {
       const monthlyFunds = getMonthlySavings(profile);
       const projectedIncome = profile.projectedFreelanceIncome ?? 0;
       const checks: RequirementCheck[] = [
-        { label: "Freelance intent", met: profile.wantsFreelancing, detail: "This route only fits if you intend to work independently in Germany." },
-        { label: "Business plan", met: profile.hasBusinessPlan, detail: "A credible business plan is mandatory." },
+        { label: "قصد فریلنسری", met: profile.wantsFreelancing, detail: "این مسیر فقط برای کار مستقل معنا دارد." },
+        { label: "طرح کسب‌وکار", met: profile.hasBusinessPlan, detail: "طرح کسب‌وکار معتبر الزامی است." },
         {
-          label: "Monthly funds",
+          label: "تمکن ماهانه",
           met: monthlyFunds >= context.freelancerMonthlyFunds,
-          detail:
-            monthlyFunds >= context.freelancerMonthlyFunds
-              ? `Your funds meet the ${formatCurrency(context.freelancerMonthlyFunds, "month")} setup benchmark.`
-              : `You need about ${formatCurrency(context.freelancerMonthlyFunds - monthlyFunds, "month")} more per month to match the usual setup benchmark.`,
+          detail: monthlyFunds >= context.freelancerMonthlyFunds
+            ? `تمکن شما به معیار ${formatCurrency(context.freelancerMonthlyFunds, "month")} می‌رسد.`
+            : `حدود ${formatCurrency(context.freelancerMonthlyFunds - monthlyFunds, "month")} برای معیار راه‌اندازی کم دارید.`,
         },
         {
-          label: "Projected annual income",
+          label: "درآمد پیش‌بینی‌شده",
           met: projectedIncome >= 25000,
-          detail:
-            projectedIncome >= 25000
-              ? `Your projected income clears the ${formatCurrency(25000)} baseline.`
-              : `Your business case should project at least ${formatCurrency(25000)} annually; you are currently ${formatCurrency(25000 - projectedIncome)} short.`,
+          detail: projectedIncome >= 25000
+            ? `درآمد پیش‌بینی‌شده از ${formatCurrency(25000)} عبور می‌کند.`
+            : `باید حداقل ${formatCurrency(25000)} در سال پیش‌بینی شود؛ الان ${formatCurrency(25000 - projectedIncome)} کم دارید.`,
         },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       return {
         eligible: missingItems.length === 0,
         score: byRequirements(checks, 33),
-        rationale: summarize(checks, missingItems, "You have the shape of a freelancer application if your business plan can show local economic value and sustainable income."),
+        rationale: summarize(missingItems, "اگر طرح کسب‌وکار ارزش اقتصادی محلی را نشان دهد، مسیر فریلنسری قابل بررسی است."),
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["Berlin is generally viewed as the most freelancer-friendly city.", "Strong local demand evidence materially improves this case."],
+        fitHighlights: ["برلین معمولاً بازترین رویکرد را برای فریلنسرها دارد.", "تقاضای محلی قوی پرونده را محکم می‌کند."],
       };
     },
   },
@@ -511,40 +438,36 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Family Reunification Visa",
     shortLabel: "Family Reunion",
     category: "family",
-    summary: "For spouses and children joining a close family member who already has lawful residence in Germany.",
-    processingTime: "6-20 weeks",
+    summary: "برای همسر و فرزندان فردی که اقامت قانونی در آلمان دارد.",
+    processingTime: "۶ تا ۲۰ هفته",
     applicationCost: "€75",
-    residencyPath: "Varies by sponsor: 3 years with a German-citizen spouse, 21/33 months with a Blue Card spouse, 5 years with a permanent-resident sponsor.",
-    validity: "Aligned to sponsor's residence status",
-    keyRequirements: [
-      "Qualifying spouse/family sponsor in Germany",
-      "A1 German for most spouses except Blue Card family members",
-      "Marriage certificate and standard family documents",
-    ],
+    residencyPath: "۳ سال با همسر شهروند آلمان، ۲۱/۳۳ ماه با همسر بلوکارت، ۵ سال با همسر دارای اقامت دائم.",
+    validity: "متناسب با وضعیت اسپانسر",
+    keyRequirements: ["اسپانسر واجد شرایط در آلمان", "آلمانی A1 برای اکثر همسران، به‌جز همسر بلوکارت", "مدارک ازدواج و خانواده"],
     evaluate: (profile) => {
       const sponsor = profile.spouseInGermanyStatus;
       const languageNeeded = sponsor !== "blue-card";
       const checks: RequirementCheck[] = [
-        { label: "Sponsor in Germany", met: sponsor !== "none", detail: "You need a spouse or close family sponsor who already has lawful status in Germany." },
+        { label: "اسپانسر در آلمان", met: sponsor !== "none", detail: "همسر یا عضو خانواده با اقامت قانونی در آلمان لازم است." },
         {
-          label: "Language for spouse route",
+          label: "زبان مسیر همسر",
           met: !languageNeeded || meetsGermanLevel(profile.germanLevel, "A1"),
-          detail: languageNeeded ? "Most spouse routes require at least A1 German." : "Blue Card spouses do not need German for the visa.",
+          detail: languageNeeded ? "بیشتر مسیرهای همسر حداقل A1 می‌خواهند." : "همسر دارندهٔ بلوکارت برای ویزا به آلمانی نیاز ندارد.",
         },
         {
-          label: "Dependent child logic",
+          label: "فرزندان",
           met: !profile.hasChildrenUnder18 || profile.dependents > 0,
-          detail: "Children under 18 can typically accompany a qualifying family application.",
+          detail: "فرزندان زیر ۱۸ سال معمولاً می‌توانند همراه باشند.",
         },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
       const fitHighlights = [];
-      if (sponsor === "blue-card") fitHighlights.push("A Blue Card spouse route is especially strong because work authorization is immediate and German is not required.");
-      if (profile.hasChildrenUnder18) fitHighlights.push("Minor children can usually be included in the family case.");
+      if (sponsor === "blue-card") fitHighlights.push("مسیر همسر بلوکارت قوی است چون اجازهٔ کار فوری است و آلمانی الزامی نیست.");
+      if (profile.hasChildrenUnder18) fitHighlights.push("فرزندان صغیر معمولاً در پروندهٔ خانواده قابل افزودن هستند.");
       return {
         eligible: missingItems.length === 0,
         score: byRequirements(checks, sponsor === "blue-card" ? 58 : 40),
-        rationale: summarize(checks, missingItems, "Your family profile suggests reunion may be the most direct path if the sponsor's status in Germany is solid."),
+        rationale: summarize(missingItems, "اگر وضعیت اسپانسر در آلمان محکم باشد، اجتماع خانواده می‌تواند مستقیم‌ترین مسیر باشد."),
         missingItems,
         requirementChecks: checks,
         fitHighlights,
@@ -557,38 +480,33 @@ export const germanyVisas: VisaDefinition[] = [
     name: "Permanent Residence Outlook",
     shortLabel: "Permanent Residence",
     category: "permanent-residence",
-    summary: "Not an entry visa, but an estimate of which route gives you the fastest path to settle permanently in Germany.",
-    processingTime: "4-16 weeks once eligible",
+    summary: "ویزای ورود نیست؛ برآوردی از سریع‌ترین مسیر شما تا اقامت دائم است.",
+    processingTime: "۴ تا ۱۶ هفته پس از احراز شرایط",
     applicationCost: "€113",
-    residencyPath: "Requires lawful residence history plus B1 German, financial independence, pension contributions, and a clean record.",
-    validity: "Permanent",
-    keyRequirements: [
-      "B1 German for most routes",
-      "Financial independence",
-      "Pension contributions during legal stay",
-      "Best timelines: Blue Card 21/33 months, post-study work 2 years, skilled worker 4 years",
-    ],
+    residencyPath: "سابقهٔ اقامت قانونی، آلمانی B1، استقلال مالی و پرداخت بیمهٔ بازنشستگی.",
+    validity: "دائمی",
+    keyRequirements: ["آلمانی B1 در بیشتر مسیرها", "استقلال مالی", "سریع‌ترین زمان‌ها: بلوکارت ۲۱/۳۳ ماه، تحصیل‌به‌کار ۲ سال، نیروی متخصص ۴ سال"],
     evaluate: (profile, context) => {
       const blueThreshold = shortageThreshold(profile, context);
       const canBlueCard = hasAcademicDegree(profile) && profile.recognitionStatus === "full" && profile.hasGermanJobOffer && (profile.annualSalaryOffer ?? 0) >= blueThreshold;
       const postStudyPotential = profile.hasUniversityAdmission || profile.wantsToStudy;
       const checks: RequirementCheck[] = [
-        { label: "B1 German", met: meetsGermanLevel(profile.germanLevel, "B1"), detail: "Most permanent residence tracks require B1 German." },
-        { label: "Financial independence", met: (profile.monthlySavings ?? 0) >= 934 || profile.hasGermanJobOffer || profile.wantsFreelancing, detail: "You will need to stay financially independent and avoid relying on social assistance." },
-        { label: "Fastest qualifying base route", met: canBlueCard || postStudyPotential || profile.hasAusbildungContract || profile.hasGermanJobOffer, detail: "You need a qualifying underlying residence route before permanent residence becomes possible." },
+        { label: "آلمانی B1", met: meetsGermanLevel(profile.germanLevel, "B1"), detail: "بیشتر مسیرهای اقامت دائم B1 می‌خواهند." },
+        { label: "استقلال مالی", met: (profile.monthlySavings ?? 0) >= 934 || profile.hasGermanJobOffer || profile.wantsFreelancing, detail: "باید از نظر مالی مستقل بمانید و به کمک اجتماعی وابسته نباشید." },
+        { label: "مسیر پایه", met: canBlueCard || postStudyPotential || profile.hasAusbildungContract || profile.hasGermanJobOffer, detail: "قبل از اقامت دائم باید یک مسیر ورود واجد شرایط داشته باشید." },
       ];
       const missingItems = checks.filter((check) => !check.met).map((check) => check.detail);
-      let headline = "Your permanent-residence timeline will depend on the route you enter with.";
-      if (canBlueCard && meetsGermanLevel(profile.germanLevel, "B1")) headline = "If you enter on a Blue Card, you are aligned with the fastest 21-month permanent-residence timeline in the guide.";
-      else if (canBlueCard) headline = "If you enter on a Blue Card, you could target permanent residence after 33 months, or faster at 21 months once you reach B1 German.";
-      else if (postStudyPotential) headline = "A study-led route can still become permanent residence after graduation plus 2 years of work, provided you reach B1 German.";
+      let headline = "زمان رسیدن به اقامت دائم به مسیری بستگی دارد که با آن وارد می‌شوید.";
+      if (canBlueCard && meetsGermanLevel(profile.germanLevel, "B1")) headline = "اگر با بلوکارت وارد شوید، با آلمانی B1 در سریع‌ترین زمان راهنما یعنی ۲۱ ماه قرار می‌گیرید.";
+      else if (canBlueCard) headline = "با بلوکارت می‌توان پس از ۳۳ ماه برای اقامت دائم اقدام کرد؛ با رسیدن به B1 این زمان به ۲۱ ماه کاهش می‌یابد.";
+      else if (postStudyPotential) headline = "مسیر تحصیلی پس از فارغ‌التحصیلی و ۲ سال کار، با شرط B1، به اقامت دائم می‌رسد.";
       return {
         eligible: missingItems.length === 0,
         score: byRequirements(checks, 30),
         rationale: headline,
         missingItems,
         requirementChecks: checks,
-        fitHighlights: ["Blue Card is the fastest path in the guide.", "Student-to-work is one of the strongest long-term routes when you do not already hold a job offer."],
+        fitHighlights: ["بلوکارت سریع‌ترین مسیر راهنماست.", "تحصیل‌به‌کار وقتی پیشنهاد شغلی ندارید از قوی‌ترین مسیرهای بلندمدت است."],
       };
     },
   },

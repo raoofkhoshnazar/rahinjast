@@ -4,6 +4,8 @@ RahInjast is a Next.js MVP that collects a user's profile and recommends the str
 
 - **GitHub:** https://github.com/raoofkhoshnazar/rahinjast
 - **Live site:** https://raoofkhoshnazar.github.io/rahinjast/
+- Interface: Persian, RTL, Vazirmatn, designed for Iranian users
+- Visa names stay in English so they match official German sources
 
 ## What it does
 
