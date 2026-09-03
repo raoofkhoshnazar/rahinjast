@@ -2,6 +2,9 @@
 
 RahInjast is a Next.js MVP that collects a user's profile and recommends the strongest German immigration pathway based on a structured rules dataset derived from the supplied Germany visa guide.
 
+- **GitHub:** https://github.com/raoofkhoshnazar/rahinjast
+- **Live site:** https://raoofkhoshnazar.github.io/rahinjast/
+
 ## What it does
 
 - Guides the user through a four-step profile form
