@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { germanyVisas } from "@/lib/visa/countries/germany";
 import { rankVisaRecommendations } from "@/lib/visa/engine";
 import {
@@ -14,7 +14,13 @@ import {
   type UserProfile,
 } from "@/types/profile";
 
-const STORAGE_KEY = "rahinjast-profile";
+const STORAGE_KEY = "rahinjast-session";
+const LEGACY_STORAGE_KEY = "rahinjast-profile";
+
+type StoredSession = {
+  profile: UserProfile;
+  step: number;
+};
 
 const steps = [
   "Background",
@@ -95,38 +101,55 @@ function scoreTone(score: number, eligible: boolean) {
   return "bg-zinc-400";
 }
 
-function readStoredProfile() {
-  if (typeof window === "undefined") return defaultProfile;
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (!saved) return defaultProfile;
+function readStoredSession(): StoredSession {
+  if (typeof window === "undefined") {
+    return { profile: defaultProfile, step: 0 };
+  }
+
+  const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (!saved) {
+    return { profile: defaultProfile, step: 0 };
+  }
+
   try {
-    return { ...defaultProfile, ...JSON.parse(saved) } as UserProfile;
+    const parsed = JSON.parse(saved) as Partial<StoredSession> & Partial<UserProfile>;
+    const profile = parsed.profile
+      ? { ...defaultProfile, ...parsed.profile }
+      : { ...defaultProfile, ...parsed };
+    const step = typeof parsed.step === "number" ? parsed.step : 0;
+    return { profile, step };
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
-    return defaultProfile;
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    return { profile: defaultProfile, step: 0 };
   }
 }
 
 export function RahInjastApp() {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
-  const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState(0);
   const [touched, setTouched] = useState(false);
+  const [ready, setReady] = useState(false);
+  const editedRef = useRef(false);
   const resultsVisible = step >= steps.length;
 
   useEffect(() => {
-    const stored = readStoredProfile();
-    const frame = window.requestAnimationFrame(() => {
-      setProfile(stored);
-      setHydrated(true);
-    });
-    return () => window.cancelAnimationFrame(frame);
+    if (editedRef.current) {
+      setReady(true);
+      return;
+    }
+
+    const stored = readStoredSession();
+    setProfile(stored.profile);
+    setStep(stored.step);
+    setReady(true);
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-  }, [hydrated, profile]);
+    if (!ready) return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, step }));
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  }, [ready, profile, step]);
 
   const recommendations = useMemo(() => rankVisaRecommendations(profile, germanyVisas), [profile]);
   const rankedVisas = recommendations.filter((item) => item.category !== "permanent-residence");
@@ -137,20 +160,30 @@ export function RahInjastApp() {
   const canContinue = Object.keys(stepErrors).length === 0;
 
   function updateProfile<K extends keyof UserProfile>(key: K, value: UserProfile[K]) {
+    editedRef.current = true;
     setProfile((current) => ({ ...current, [key]: value }));
+  }
+
+  function goToStep(nextStep: number) {
+    setTouched(false);
+    setStep(nextStep);
   }
 
   function goNext() {
     setTouched(true);
     if (!canContinue) return;
     const nextStep = Math.min(step + 1, steps.length);
-    setStep(nextStep);
-    setTouched(false);
+    goToStep(nextStep);
     if (nextStep === steps.length) {
       window.requestAnimationFrame(() => {
         document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    goNext();
   }
 
   function goBack() {
@@ -238,7 +271,7 @@ export function RahInjastApp() {
                   <button
                     key={item}
                     type="button"
-                    onClick={() => setStep(index)}
+                    onClick={() => goToStep(index)}
                     className={`rounded-2xl px-4 py-3 text-left text-sm transition ${
                       active
                         ? "bg-slate-950 text-white"
@@ -254,7 +287,7 @@ export function RahInjastApp() {
               })}
             </div>
 
-            <div className="mt-8 space-y-8">
+            <form className="mt-8 space-y-8" onSubmit={handleSubmit}>
               {step === 0 && (
                 <div className="grid gap-5 sm:grid-cols-2">
                   <Field label="Age" error={touched ? stepErrors.age : undefined}>
@@ -357,7 +390,7 @@ export function RahInjastApp() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setStep(0)}
+                      onClick={() => goToStep(0)}
                       className="rounded-full border border-cyan-300 px-5 py-3 text-sm font-medium text-cyan-900 transition hover:border-cyan-500 hover:bg-white"
                     >
                       Edit profile again
@@ -365,7 +398,6 @@ export function RahInjastApp() {
                   </div>
                 </div>
               )}
-            </div>
 
             <div className="mt-8 flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
               <button type="button" onClick={goBack} className="rounded-full border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-950 hover:text-slate-950" disabled={step === 0}>
@@ -373,16 +405,17 @@ export function RahInjastApp() {
               </button>
               <div className="flex items-center gap-3">
                 {step < steps.length - 1 ? (
-                  <button type="button" onClick={goNext} className="rounded-full bg-slate-950 px-6 py-3 text-sm font-medium text-white transition hover:bg-slate-800">
+                  <button type="submit" className="rounded-full bg-slate-950 px-6 py-3 text-sm font-medium text-white transition hover:bg-slate-800">
                     Continue
                   </button>
                 ) : (
-                  <button type="button" onClick={goNext} className="rounded-full bg-cyan-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-cyan-500">
+                  <button type="submit" className="rounded-full bg-cyan-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-cyan-500">
                     See recommendations
                   </button>
                 )}
               </div>
             </div>
+            </form>
           </div>
 
           <div id="results" className="space-y-6">
@@ -502,11 +535,11 @@ type FieldProps = {
 
 function Field({ label, children, error, className }: FieldProps) {
   return (
-    <label className={className}>
+    <div className={className}>
       <div className="mb-2 text-sm font-medium text-slate-700">{label}</div>
       {children}
       {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
-    </label>
+    </div>
   );
 }
 
