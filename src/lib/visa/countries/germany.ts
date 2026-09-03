@@ -33,8 +33,8 @@ function chancenkartePoints(profile: UserProfile) {
   let points = 0;
 
   if (hasPostSecondaryQualification(profile) && ["partial", "full"].includes(profile.recognitionStatus)) points += 4;
-  if (profile.germanLevel === "B2") points += 1;
-  if (profile.germanLevel === "A2") points += 0.5;
+  if (meetsGermanLevel(profile.germanLevel, "B2")) points += 1;
+  else if (meetsGermanLevel(profile.germanLevel, "A2")) points += 0.5;
   if (meetsEnglishLevel(profile.englishLevel, "C1")) points += 1;
   if (profile.age !== null && profile.age < 35) points += 1;
   else if (profile.age !== null && profile.age <= 40) points += 0.5;

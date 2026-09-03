@@ -95,33 +95,43 @@ function scoreTone(score: number, eligible: boolean) {
   return "bg-zinc-400";
 }
 
+function readStoredProfile() {
+  if (typeof window === "undefined") return defaultProfile;
+  const saved = window.localStorage.getItem(STORAGE_KEY);
+  if (!saved) return defaultProfile;
+  try {
+    return { ...defaultProfile, ...JSON.parse(saved) } as UserProfile;
+  } catch {
+    window.localStorage.removeItem(STORAGE_KEY);
+    return defaultProfile;
+  }
+}
+
 export function RahInjastApp() {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
+  const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState(0);
   const [touched, setTouched] = useState(false);
   const resultsVisible = step >= steps.length;
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as UserProfile;
-        const frame = window.requestAnimationFrame(() => {
-          setProfile({ ...defaultProfile, ...parsed });
-        });
-        return () => window.cancelAnimationFrame(frame);
-      } catch {
-        window.localStorage.removeItem(STORAGE_KEY);
-      }
-    }
+    const stored = readStoredProfile();
+    const frame = window.requestAnimationFrame(() => {
+      setProfile(stored);
+      setHydrated(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-  }, [profile]);
+  }, [hydrated, profile]);
 
   const recommendations = useMemo(() => rankVisaRecommendations(profile, germanyVisas), [profile]);
-  const topRecommendations = recommendations.filter((item) => item.category !== "permanent-residence").slice(0, 3);
+  const rankedVisas = recommendations.filter((item) => item.category !== "permanent-residence");
+  const topRecommendations = rankedVisas.slice(0, 3);
+  const remainingRecommendations = rankedVisas.slice(3);
   const residenceOutlook = recommendations.find((item) => item.id === "permanent-residence");
   const stepErrors = validateStep(step, profile);
   const canContinue = Object.keys(stepErrors).length === 0;
@@ -133,8 +143,14 @@ export function RahInjastApp() {
   function goNext() {
     setTouched(true);
     if (!canContinue) return;
-    setStep((current) => Math.min(current + 1, steps.length));
+    const nextStep = Math.min(step + 1, steps.length);
+    setStep(nextStep);
     setTouched(false);
+    if (nextStep === steps.length) {
+      window.requestAnimationFrame(() => {
+        document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
   }
 
   function goBack() {
@@ -369,7 +385,7 @@ export function RahInjastApp() {
             </div>
           </div>
 
-          <div className="space-y-6">
+          <div id="results" className="space-y-6">
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -384,7 +400,12 @@ export function RahInjastApp() {
                   <article key={visa.id} className="rounded-[1.5rem] border border-slate-200 p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">#{index + 1} recommendation</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">#{index + 1} recommendation</div>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${visa.eligible ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                            {visa.eligible ? "Likely eligible" : "Gaps remain"}
+                          </span>
+                        </div>
                         <h3 className="mt-2 text-xl font-semibold text-slate-950">{visa.name}</h3>
                         <p className="mt-2 text-sm leading-6 text-slate-600">{visa.summary}</p>
                       </div>
@@ -427,6 +448,23 @@ export function RahInjastApp() {
                   </article>
                 ))}
               </div>
+
+              {remainingRecommendations.length > 0 && (
+                <div className="mt-6 space-y-3">
+                  <h3 className="text-lg font-semibold text-slate-950">Other scored pathways</h3>
+                  {remainingRecommendations.map((visa, index) => (
+                    <div key={visa.id} className="rounded-2xl border border-slate-200 px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-950">#{index + 4} {visa.name}</p>
+                          <p className="mt-1 text-sm leading-6 text-slate-600">{visa.rationale}</p>
+                        </div>
+                        <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">{visa.score}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {residenceOutlook && (
