@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { Button, ChoicePair, Field, Stepper } from "@/components/ui";
 import { fa } from "@/lib/copy/fa";
@@ -34,20 +34,29 @@ function languageLabel(level: string) {
   return level === "none" ? fa.options.languageNone : level;
 }
 
-function readStoredSession(): StoredSession {
-  if (typeof window === "undefined") return { profile: defaultProfile, step: 0, view: "home" };
+function subscribeHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+}
+
+function parseHash(hash = typeof window === "undefined" ? "" : window.location.hash): { view: AppView; step: number } {
+  const value = hash.replace(/^#/, "");
+  if (value.startsWith("results")) return { view: "results", step: 3 };
+  const formMatch = value.match(/^form\/(\d)/);
+  if (formMatch) return { view: "form", step: Math.min(3, Number(formMatch[1])) };
+  if (value === "form") return { view: "form", step: 0 };
+  return { view: "home", step: 0 };
+}
+
+function readStoredProfile(): UserProfile {
+  if (typeof window === "undefined") return defaultProfile;
   const raw = window.localStorage.getItem(STORAGE_KEY) ?? LEGACY_KEYS.map((key) => window.localStorage.getItem(key)).find(Boolean);
-  if (!raw) return { profile: defaultProfile, step: 0, view: "home" };
+  if (!raw) return defaultProfile;
   try {
     const parsed = JSON.parse(raw) as Partial<StoredSession> & Partial<UserProfile>;
-    const profile = parsed.profile ? { ...defaultProfile, ...parsed.profile } : { ...defaultProfile, ...parsed };
-    return {
-      profile,
-      step: typeof parsed.step === "number" ? parsed.step : 0,
-      view: parsed.view === "form" || parsed.view === "results" ? parsed.view : "home",
-    };
+    return parsed.profile ? { ...defaultProfile, ...parsed.profile } : { ...defaultProfile, ...parsed };
   } catch {
-    return { profile: defaultProfile, step: 0, view: "home" };
+    return defaultProfile;
   }
 }
 
@@ -73,32 +82,42 @@ function validateStep(step: number, profile: UserProfile) {
 }
 
 export function RahInjastApp() {
+  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
+  const { view, step } = parseHash(hash);
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
-  const [step, setStep] = useState(0);
-  const [view, setView] = useState<AppView>("home");
   const [touched, setTouched] = useState(false);
-  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const editedRef = useRef(false);
+  const profileReady = useRef(false);
 
-  useEffect(() => {
-    if (editedRef.current) {
-      setReady(true);
+  function navigate(nextView: AppView, nextStep = step) {
+    const nextHash = nextView === "home" ? "" : nextView === "results" ? "results" : `form/${nextStep}`;
+    if (!nextHash) {
+      if (window.location.hash) {
+        window.history.pushState(null, "", `${window.location.pathname}${window.location.search}`);
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      }
       return;
     }
-    const stored = readStoredSession();
-    setProfile(stored.profile);
-    setStep(stored.step);
-    setView(stored.view);
-    setReady(true);
+    window.location.hash = nextHash;
+  }
+
+  useEffect(() => {
+    const stored = readStoredProfile();
+    const timer = window.setTimeout(() => {
+      if (!profileReady.current) {
+        setProfile(stored);
+      }
+      profileReady.current = true;
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!profileReady.current) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, step, view }));
     LEGACY_KEYS.forEach((key) => window.localStorage.removeItem(key));
-  }, [ready, profile, step, view]);
+  }, [profile, step, view]);
 
   const recommendations = useMemo(() => rankVisaRecommendations(profile, germanyVisas), [profile]);
   const ranked = recommendations.filter((item) => item.category !== "permanent-residence");
@@ -109,29 +128,27 @@ export function RahInjastApp() {
   const canContinue = Object.keys(stepErrors).length === 0;
 
   function updateProfile<K extends keyof UserProfile>(key: K, value: UserProfile[K]) {
-    editedRef.current = true;
+    profileReady.current = true;
     setProfile((current) => ({ ...current, [key]: value }));
   }
 
   function startAssessment() {
-    editedRef.current = true;
-    setView("form");
-    setStep(0);
     setTouched(false);
     setError(null);
+    navigate("form", 0);
   }
 
   function goNext() {
     setTouched(true);
     if (!canContinue) return;
     if (step < fa.steps.length - 1) {
-      setStep(step + 1);
       setTouched(false);
+      navigate("form", step + 1);
       return;
     }
     setError(null);
     setLoading(true);
-    setView("results");
+    navigate("results");
     window.setTimeout(() => setLoading(false), 650);
   }
 
@@ -144,12 +161,21 @@ export function RahInjastApp() {
     <div className="min-h-screen bg-off-white text-ink">
       <header className="border-b border-line bg-surface/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
-          <button type="button" onClick={() => setView("home")} className="text-right">
+          <button type="button" onClick={() => navigate("home")} className="text-right">
             <div className="text-lg font-bold text-navy-950">{fa.brand}</div>
             <div className="text-xs tracking-[0.18em] text-navy-600">{fa.brandLatin}</div>
           </button>
           {view !== "form" ? (
-            <Button type="button" onClick={startAssessment}>{fa.navStart}</Button>
+            <a
+              href="#form/0"
+              onClick={(event) => {
+                event.preventDefault();
+                startAssessment();
+              }}
+              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-navy-800 px-6 text-sm font-semibold text-white transition hover:bg-navy-950"
+            >
+              {fa.navStart}
+            </a>
           ) : (
             <div className="text-sm text-muted">مرحله {step + 1} از {fa.steps.length}</div>
           )}
@@ -161,7 +187,7 @@ export function RahInjastApp() {
         {view === "form" && (
           <form className="mx-auto max-w-4xl" onSubmit={handleSubmit}>
             <div className="rounded-[24px] border border-line bg-surface p-6 card-shadow sm:p-8">
-              <Stepper steps={fa.steps} current={step} onSelect={(index) => { setStep(index); setTouched(false); }} />
+              <Stepper steps={fa.steps} current={step} onSelect={(index) => { setTouched(false); navigate("form", index); }} />
               <div className="mt-8 space-y-2">
                 <p className="text-sm font-semibold text-amber-500">{fa.steps[step]}</p>
                 <h1 className="text-3xl font-bold text-navy-950 sm:text-4xl">{fa.stepMeta[step as 0 | 1 | 2 | 3].title}</h1>
@@ -182,7 +208,7 @@ export function RahInjastApp() {
               ) : null}
 
               <div className="mt-8 flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
-                <Button type="button" variant="secondary" onClick={() => (step === 0 ? setView("home") : setStep(step - 1))}>
+                <Button type="button" variant="secondary" onClick={() => (step === 0 ? navigate("home") : navigate("form", step - 1))}>
                   {fa.buttons.back}
                 </Button>
                 <Button type="submit">
@@ -200,11 +226,10 @@ export function RahInjastApp() {
             residence={residence}
             onRestart={() => {
               setProfile(defaultProfile);
-              setStep(0);
-              setView("home");
               setTouched(false);
+              navigate("home", 0);
             }}
-            onEdit={() => setView("form")}
+            onEdit={() => navigate("form", 0)}
           />
         )}
       </main>
@@ -217,11 +242,20 @@ function HomeHero({ onStart }: { onStart: () => void }) {
   return (
     <section className="space-y-12">
       <div className="grid items-stretch gap-0 overflow-hidden rounded-[24px] border border-line bg-surface card-shadow lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-6 p-6 sm:p-10 lg:p-12">
+        <div className="relative z-10 space-y-6 p-6 sm:p-10 lg:p-12">
           <p className="text-sm font-semibold text-amber-500">{fa.brand}</p>
           <h1 className="text-4xl font-bold leading-tight text-navy-950 sm:text-5xl">{fa.heroTitle}</h1>
           <p className="max-w-xl text-lg text-muted">{fa.heroBody}</p>
-          <Button type="button" onClick={onStart} className="min-h-14 px-8 text-base">{fa.ctaStart}</Button>
+          <a
+            href="#form/0"
+            onClick={(event) => {
+              event.preventDefault();
+              onStart();
+            }}
+            className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-navy-800 px-8 text-base font-semibold text-white transition hover:bg-navy-950"
+          >
+            {fa.ctaStart}
+          </a>
           <div className="grid gap-4 pt-2 sm:grid-cols-3">
             {fa.trust.map((item) => (
               <div key={item.title} className="rounded-2xl bg-off-white px-4 py-4">
@@ -231,8 +265,8 @@ function HomeHero({ onStart }: { onStart: () => void }) {
             ))}
           </div>
         </div>
-        <div className="relative min-h-72 overflow-hidden bg-navy-950 lg:min-h-full">
-          <Image src="/hero-berlin.svg" alt="" fill className="object-cover" unoptimized />
+        <div className="relative isolate min-h-72 overflow-hidden bg-navy-950 lg:min-h-[28rem]">
+          <Image src="/hero-berlin.svg" alt="" fill className="pointer-events-none object-cover" unoptimized />
         </div>
       </div>
     </section>
