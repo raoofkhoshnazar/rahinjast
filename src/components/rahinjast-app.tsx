@@ -106,7 +106,10 @@ export function RahInjastApp() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as UserProfile;
-        setProfile({ ...defaultProfile, ...parsed });
+        const frame = window.requestAnimationFrame(() => {
+          setProfile({ ...defaultProfile, ...parsed });
+        });
+        return () => window.cancelAnimationFrame(frame);
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
       }
@@ -371,7 +374,7 @@ export function RahInjastApp() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold">Best-fit pathways</h2>
-                  <p className="mt-1 text-sm text-slate-600">Ranked against the guide's Germany rules and thresholds.</p>
+                  <p className="mt-1 text-sm text-slate-600">Ranked against the guide&apos;s Germany rules and thresholds.</p>
                 </div>
                 <div className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">Live as you type</div>
               </div>
@@ -415,7 +418,7 @@ export function RahInjastApp() {
                         </ul>
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-slate-950">What you're missing</p>
+                        <p className="text-sm font-medium text-slate-950">What you&apos;re missing</p>
                         <ul className="mt-2 space-y-2 text-sm text-slate-600">
                           {visa.missingItems.length ? visa.missingItems.map((item) => <li key={item} className="rounded-xl bg-amber-50 px-3 py-2 text-amber-900">{item}</li>) : <li className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-900">No obvious blocker detected from the current profile.</li>}
                         </ul>
